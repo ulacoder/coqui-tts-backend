@@ -7,11 +7,17 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-# Initialize Coqui TTS with XTTS-v2 model (supports voice cloning)
-tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2")
-
 # Path to voice sample for cloning
 VOICE_SAMPLE_PATH = os.getenv("VOICE_SAMPLE_PATH", "voice_sample.wav")
+
+# Lazy load TTS model to avoid startup timeout
+tts = None
+
+def get_tts():
+    global tts
+    if tts is None:
+        tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2")
+    return tts
 
 @app.route('/health', methods=['GET'])
 def health():
@@ -31,7 +37,8 @@ def generate_speech():
             return jsonify({"error": "Voice sample not found. Upload voice_sample.wav"}), 500
 
         # Generate speech with voice cloning
-        wav = tts.tts(
+        tts_instance = get_tts()
+        wav = tts_instance.tts(
             text=text,
             speaker_wav=VOICE_SAMPLE_PATH,
             language="ru"  # Russian language
@@ -39,7 +46,7 @@ def generate_speech():
 
         # Convert to bytes
         audio_buffer = io.BytesIO()
-        tts.synthesizer.save_wav(wav, audio_buffer)
+        tts_instance.synthesizer.save_wav(wav, audio_buffer)
         audio_buffer.seek(0)
 
         return send_file(
